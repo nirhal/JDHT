@@ -6,6 +6,7 @@ package org.jdht.dht;
 
 
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
 public class Node {
@@ -46,6 +47,20 @@ public class Node {
 
     public Node(InetAddress ip, int port){
         this(null, ip, port, false);
+    }
+
+    public Node(ByteBuffer compactInfo, int ipLength, boolean permanent) throws UnknownHostException {
+        byte[] newNodeIDBA = new byte[20];
+        compactInfo.get(newNodeIDBA);
+        byte[] newNodeIPBA = new byte[ipLength];
+        compactInfo.get(newNodeIPBA);
+        byte[] newNodePortBA = new byte[2];
+        compactInfo.get(newNodePortBA);
+        nodeId = ByteBuffer.wrap(newNodeIDBA);
+        ip = InetAddress.getByAddress(newNodeIPBA);
+        port = ((newNodePortBA[0] & 0xFF) << 8) | (newNodePortBA[1] & 0xFF);
+        this.permanent = permanent;
+        this.compactInfo = compactInfo.array();
     }
 
     public Node(int port){

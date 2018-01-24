@@ -42,16 +42,14 @@ public class KRPC implements Runnable {
         public Object opaque;
     }
 
-    private Node myNode = null;
     private OnQueryReceived onQueryReceived = null;
     private int port;
     private DatagramSocket socket;
     private Thread thread = null;
     private final List<QueryData> queryList = new LinkedList<>();
 
-    public KRPC(Node myNode, OnQueryReceived onQueryReceived){
-        this.myNode = myNode;
-        this.port = myNode.getPort();
+    public KRPC(int port, OnQueryReceived onQueryReceived){
+        this.port = port;
         this.onQueryReceived = onQueryReceived;
     }
 

@@ -5,6 +5,7 @@
 package org.jdht.dht;
 
 
+import java.io.*;
 import java.lang.ref.WeakReference;
 import java.net.InetAddress;
 import java.net.SocketException;
@@ -50,23 +51,34 @@ public class DHT implements Runnable {
     private int peerPort;
     private AtomicBoolean stopped = new AtomicBoolean(true);
     private DHTPeersReceiver peersReceiver;
+    private File dhtFile = null;
 
-    public DHT(Node myNode, int peerPort, DHTPeersReceiver peersReceiver){
+    public DHT(File dhtFile, Node myNode, int peerPort, DHTPeersReceiver peersReceiver){
         this.myNode = myNode;
         this.peerPort = peerPort;
         this.peersReceiver = peersReceiver;
-        krpc = new KRPC(myNode, new QueryReceiver(this));
+        this.dhtFile = dhtFile;
+        krpc = new KRPC(myNode.getPort(), new QueryReceiver(this));
         responseReceiver = new ResponseReceiver(this);
         blacklist = new HashMap<>();
         outgoingTokens = new HashMap<>();
         peerQueries = new LinkedList<>();
     }
 
+    public DHT(Node myNode, int peerPort, DHTPeersReceiver peersReceiver){
+        this(null, myNode, peerPort, peersReceiver);
+    }
+
     public DHT(int port, int peerPort, DHTPeersReceiver peersReceiver){
-        this(new Node(port), peerPort, peersReceiver);
+        this(null, port, peerPort, peersReceiver);
+    }
+
+    public DHT(File dhtFile, int port, int peerPort, DHTPeersReceiver peersReceiver){
+        this(dhtFile, new Node(port), peerPort, peersReceiver);
     }
 
     public void start() throws SocketException {
+        List<Node> savedNodes = readRoutingTable(); // First thing to do since myNode changes
         stopped.set(false);
         nodeList = new NodeList(myNode.getNodeId());
         peerList = new PeerList();
@@ -74,9 +86,13 @@ public class DHT implements Runnable {
         thread = new Thread(this);
         thread.setName("DHT_Ticker");
         thread.start();
+
+        if (savedNodes != null && savedNodes.size() > 0)
+            addNodes(savedNodes);
     }
 
     public void stop(){
+        saveRoutingTable();
         stopped.set(true);
         thread.interrupt();
         krpc.stop();
@@ -115,6 +131,88 @@ public class DHT implements Runnable {
                 break;
             }
         }
+    }
+
+    private List<Node> readRoutingTable(){
+        if (dhtFile == null || !dhtFile.exists())
+            return null;
+
+        FileInputStream fis = null;
+        try {
+            fis = new FileInputStream(dhtFile);
+
+            // Read our own node id
+            byte[] nodeId = new byte[20];
+            int ret = fis.read(nodeId);
+            if (ret != 20)
+                return null;
+
+            // Create new node for ourselves
+            myNode = new Node(ByteBuffer.wrap(nodeId), myNode.getPort());
+
+            // Read IP length
+            int ipLength = fis.read();
+            if (ipLength < 0)
+                return null;
+
+
+            List<Node> nodes = new LinkedList<>();
+            int compactInfoLength = 20 + ipLength + 2;
+            byte[] compactInfo = new byte[compactInfoLength];
+            while (fis.read(compactInfo) == compactInfoLength){
+                nodes.add(new Node(ByteBuffer.wrap(compactInfo), ipLength, false));
+            }
+
+            return nodes;
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (fis != null)
+                    fis.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return null;
+    }
+
+    private void saveRoutingTable() {
+        if (dhtFile == null)
+            return;
+
+        FileOutputStream fos = null;
+        try {
+            fos = new FileOutputStream(dhtFile);
+
+            // First write our own node id - 20 bytes
+            fos.write(myNode.getNodeId().array());
+
+            // Find the 100 closest nodes
+            List<Node> nodes = nodeList.findClosest(myNode.getNodeId(), 100);
+
+            if (nodes == null || nodes.size() == 0)
+                return;
+
+            // Write IP length
+            fos.write(nodes.get(0).getIp().getAddress().length);
+
+            // Write their compact info - 26 bytes * number of nodes
+            for (Node node : nodes)
+                fos.write(node.getCompactInfo());
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (fos != null)
+                    fos.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
     }
 
     private void tick(){

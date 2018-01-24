@@ -7,10 +7,12 @@ package com.jdht.example;
 import org.jdht.dht.*;
 
 
+import java.io.File;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Scanner;
 
 public class Main {
 
@@ -26,10 +28,19 @@ public class Main {
                 }
             };
 
-            //byte[] nodeID = hexStringToByteArray("653DBD6A8632865B26AF8FC9861339C49C03F4F6");
+            // Define DHT file
+            File saveFile = new File(System.getProperty("user.home"), "dht.dat");
 
+            // You can try come of these constructors
+
+            //byte[] nodeID = hexStringToByteArray("653DBD6A8632865B26AF8FC9861339C49C03F4F6");
             //DHT dht = new DHT(new Node(ByteBuffer.wrap(nodeID), 5739), 5643, peersReceiver);
-            DHT dht = new DHT(5739, 5643, peersReceiver);
+
+            //DHT dht = new DHT(5739, 5643, peersReceiver);
+
+            DHT dht = new DHT(saveFile, 5739, 5643, peersReceiver);
+
+
             dht.start();
 
             List<Node> list = new LinkedList<>();
@@ -43,8 +54,9 @@ public class Main {
 
             dht.getPeers(ByteBuffer.wrap(infohash), false);
 
-            // Press any key to quit
-            System.in.read();
+            // Press ENTER to quit
+            Scanner scan = new Scanner (System.in);
+            scan.nextLine();
 
             dht.stop();
 
